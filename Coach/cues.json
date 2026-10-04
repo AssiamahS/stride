@@ -1,0 +1,67 @@
+{
+  "start": [
+    {"id": "start-01", "text": "Hey. Glad you showed up. That was the hard part. Let's go."},
+    {"id": "start-02", "text": "Alright, this is your run. Nobody else's. Let's start it right."},
+    {"id": "start-03", "text": "Welcome back. You don't have to feel ready. You just have to start."}
+  ],
+  "warmup": [
+    {"id": "warmup-01", "text": "We're walking first. Shoulders loose, breathe easy. Let the body wake up."},
+    {"id": "warmup-02", "text": "Easy walk to start. No rush. The run is coming, and you'll be ready for it."},
+    {"id": "warmup-03", "text": "Just a walk right now. Think about why you're out here. Hold on to that."}
+  ],
+  "runStart": [
+    {"id": "run-01", "text": "Here we go. Pick it up to a jog. Slow is fine. Slow is the plan."},
+    {"id": "run-02", "text": "Running now. Find a pace where you could still talk to me. That's the one."},
+    {"id": "run-03", "text": "Let's run. Short steps, relaxed hands, eyes up. You've got this."},
+    {"id": "run-04", "text": "Time to run. Don't chase speed. Chase the finish of this interval."},
+    {"id": "run-05", "text": "Okay, jog it out. If it feels too easy, good. Easy is how we build."}
+  ],
+  "walkStart": [
+    {"id": "walk-01", "text": "And walk. Breathe. You earned this one."},
+    {"id": "walk-02", "text": "Back to a walk. Shake out the arms. The next one's going to feel better than you think."},
+    {"id": "walk-03", "text": "Walk now. Don't stop moving, just let the heart settle."},
+    {"id": "walk-04", "text": "Nice. Walking break. Notice that you did that. You ran."}
+  ],
+  "cooldown": [
+    {"id": "cool-01", "text": "That's the running done. Walk it off. You did everything I asked."},
+    {"id": "cool-02", "text": "Cool down now. Slow walk, deep breaths. Let it sink in."},
+    {"id": "cool-03", "text": "All the running is behind you. Walk easy and be a little proud."}
+  ],
+  "runHalfway": [
+    {"id": "half-01", "text": "Halfway through this one. Same pace. Nothing extra."},
+    {"id": "half-02", "text": "That's half. You're already doing the thing you weren't sure you could do."},
+    {"id": "half-03", "text": "Halfway. Relax the jaw, relax the shoulders. Let the legs do it."}
+  ],
+  "runLast30": [
+    {"id": "last30-01", "text": "Thirty seconds. Hold it right there."},
+    {"id": "last30-02", "text": "Half a minute left. Don't speed up. Just finish."},
+    {"id": "last30-03", "text": "Thirty seconds. This is the part that makes you a runner."}
+  ],
+  "motivation": [
+    {"id": "mot-01", "text": "Every run is a success, because every run has a purpose. Today's purpose is to finish."},
+    {"id": "mot-02", "text": "You're not out here to get faster. You're out here to become somebody who runs. That's happening right now."},
+    {"id": "mot-03", "text": "If it's hard, slow down. Slowing down is not quitting."},
+    {"id": "mot-04", "text": "Check in. How's the breathing? If you can't say a sentence, ease off a little."},
+    {"id": "mot-05", "text": "Most people are on the couch right now. You're not. Remember that."},
+    {"id": "mot-06", "text": "The first ten minutes always lie to you. Keep going. It gets easier."},
+    {"id": "mot-07", "text": "You don't need to feel good to keep going. You just need to keep going."},
+    {"id": "mot-08", "text": "Look around. Notice something you'd miss in a car. That's yours now."},
+    {"id": "mot-09", "text": "Smile. Seriously. It changes how the run feels."},
+    {"id": "mot-10", "text": "We're building a habit, not a highlight. Steady is the win."}
+  ],
+  "lastMinute": [
+    {"id": "lastmin-01", "text": "Last minute of the whole thing. Finish the way you want to remember it."},
+    {"id": "lastmin-02", "text": "One minute left. Think about where you started. Look where you are."}
+  ],
+  "finish": [
+    {"id": "finish-01", "text": "Done. That's it. You said you'd run today, and you ran. See you next time."},
+    {"id": "finish-02", "text": "And we're finished. Drink some water, stretch a little, and be proud. You did it."},
+    {"id": "finish-03", "text": "That's the run. It counts. Every single one counts. Great work."}
+  ],
+  "paused": [
+    {"id": "pause-01", "text": "Paused. Take what you need. I'm right here when you're ready."}
+  ],
+  "resumed": [
+    {"id": "resume-01", "text": "Back at it. Right where we left off."}
+  ]
+}

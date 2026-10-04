@@ -1,0 +1,159 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['web/**', 'README.md', 'NOTES.md', 'tools/**']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (unsigned compile check)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build for device (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Stride.xcodeproj \
+            -scheme Stride \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+  release:
+    name: Sign, upload to TestFlight, publish ad hoc install page
+    runs-on: macos-26
+    timeout-minutes: 45
+    needs: build
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for App Store Connect credentials
+        id: creds
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ASC secrets not set — skipping signing"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write App Store Connect API key
+        if: steps.creds.outputs.have == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc" "$HOME/private_keys"
+          printf '%s' "$ASC_KEY_P8" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey.p8"
+          cp "$RUNNER_TEMP/asc/AuthKey.p8" "$HOME/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: Install XcodeGen
+        if: steps.creds.outputs.have == 'true'
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        if: steps.creds.outputs.have == 'true'
+        run: |
+          # stamp the run number BEFORE generating — xcodegen bakes CFBundleVersion into the plists
+          sed -i '' "s/^    CURRENT_PROJECT_VERSION: .*/    CURRENT_PROJECT_VERSION: $GITHUB_RUN_NUMBER/" project.yml
+          xcodegen generate
+
+      - name: Archive (unsigned)
+        if: steps.creds.outputs.have == 'true'
+        run: |
+          set -o pipefail
+          # archive UNSIGNED; exportArchive does the cloud signing. Archiving with cloud
+          # signing mints a throwaway "Created via API" dev cert per run and hits the 10-cert cap.
+          xcodebuild archive \
+            -project Stride.xcodeproj \
+            -scheme Stride \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Stride.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=$GITHUB_RUN_NUMBER
+
+      - name: Export & upload to App Store Connect
+        if: steps.creds.outputs.have == 'true'
+        continue-on-error: true
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath build/Stride.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Export ad hoc IPA (registered devices only)
+        if: steps.creds.outputs.have == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild -exportArchive \
+            -archivePath build/Stride.xcarchive \
+            -exportOptionsPlist ExportOptionsAdHoc.plist \
+            -exportPath build/adhoc \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          ls -la build/adhoc
+
+      - name: Publish install page to GitHub Pages
+        if: steps.creds.outputs.have == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p web/ipa
+          cp build/adhoc/*.ipa web/ipa/Stride.ipa
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/Stride.xcarchive/Products/Applications/Stride.app/Info.plist)
+          cat > web/ipa/manifest.plist <<EOF2
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>items</key><array><dict>
+            <key>assets</key><array>
+              <dict><key>kind</key><string>software-package</string><key>url</key><string>https://assiamahs.github.io/stride/ipa/Stride.ipa</string></dict>
+              <dict><key>kind</key><string>display-image</string><key>url</key><string>https://assiamahs.github.io/stride/icon-180.png</string></dict>
+              <dict><key>kind</key><string>full-size-image</string><key>url</key><string>https://assiamahs.github.io/stride/icon-512.png</string></dict>
+            </array>
+            <key>metadata</key><dict>
+              <key>bundle-identifier</key><string>com.assiamah.stride</string>
+              <key>bundle-version</key><string>${VERSION}</string>
+              <key>kind</key><string>software</string>
+              <key>title</key><string>Stride</string>
+            </dict>
+          </dict></array></dict></plist>
+          EOF2
+          sed -i '' -E "s/Build [^·]*· [^·]*·/Build $GITHUB_RUN_NUMBER (v$VERSION) · $(date -u +%Y-%m-%d) ·/" web/install.html || true
+          git checkout -- project.yml   # drop the run-number stamp so the rebase is clean
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/ipa web/install.html
+          git commit -m "build: ad hoc IPA build $GITHUB_RUN_NUMBER" || exit 0
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
+          # a GITHUB_TOKEN push never triggers other workflows; dispatch Pages explicitly
+          gh workflow run pages.yml --ref main

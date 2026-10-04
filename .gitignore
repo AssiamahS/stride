@@ -1,0 +1,7 @@
+*.xcodeproj
+build/
+.DS_Store
+# real-voice clips are personal; render them locally, don't publish them
+Coach/clips/*.m4a
+Coach/clips/*.mp3
+Coach/clips/*.wav

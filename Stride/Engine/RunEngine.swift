@@ -209,25 +209,25 @@ final class RunEngine {
     private func distanceSentence() -> String {
         guard meters > 50 else { return "" }
         let km = meters / 1000
-        let dist = Self.useMiles ? String(format: "%.1f miles", km * 0.621371) : String(format: "%.1f kilometers", km)
+        let dist = Fmt.useMiles ? String(format: "%.1f miles", km * 0.621371) : String(format: "%.1f kilometers", km)
         var s = "\(dist) so far."
         if let p = pacePerKm {
-            let perUnit = Self.useMiles ? p / 0.621371 : p
+            let perUnit = Fmt.useMiles ? p / 0.621371 : p
             let m = Int(perUnit) / 60, sec = Int(perUnit) % 60
-            s += " About \(m) minutes \(sec) seconds per \(Self.useMiles ? "mile" : "kilometer")."
+            s += " About \(m) minutes \(sec) seconds per \(Fmt.useMiles ? "mile" : "kilometer")."
         }
         return s
-    }
-
-    static var useMiles: Bool {
-        get { UserDefaults.standard.object(forKey: "units.miles") as? Bool ?? (Locale.current.measurementSystem == .us) }
-        set { UserDefaults.standard.set(newValue, forKey: "units.miles") }
     }
 }
 
 // MARK: - Formatting helpers shared by views
 
 enum Fmt {
+    /// Mirrors the "units.miles" @AppStorage toggle in Coach settings.
+    static var useMiles: Bool {
+        UserDefaults.standard.object(forKey: "units.miles") as? Bool ?? (Locale.current.measurementSystem == .us)
+    }
+
     static func clock(_ t: TimeInterval) -> String {
         let s = max(0, Int(t.rounded(.down)))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
@@ -235,13 +235,13 @@ enum Fmt {
     }
 
     static func distance(_ meters: Double) -> String {
-        if RunEngine.useMiles { return String(format: "%.2f mi", meters / 1609.344) }
+        if Fmt.useMiles { return String(format: "%.2f mi", meters / 1609.344) }
         return String(format: "%.2f km", meters / 1000)
     }
 
     static func pace(_ secPerKm: TimeInterval?) -> String {
         guard let p = secPerKm else { return "--:--" }
-        let perUnit = RunEngine.useMiles ? p * 1.609344 : p
-        return String(format: "%d:%02d /%@", Int(perUnit) / 60, Int(perUnit) % 60, RunEngine.useMiles ? "mi" : "km")
+        let perUnit = Fmt.useMiles ? p * 1.609344 : p
+        return String(format: "%d:%02d /%@", Int(perUnit) / 60, Int(perUnit) % 60, Fmt.useMiles ? "mi" : "km")
     }
 }

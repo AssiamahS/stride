@@ -114,7 +114,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
-      - name: Re-archive iPhone-only for ad hoc (no watch app: ad hoc profiles need a registered Apple Watch)
+      - name: Re-archive iPhone-only for ad hoc (watch ad hoc profiles need a registered Apple Watch)
         if: steps.creds.outputs.have == 'true'
         run: |
           set -o pipefail

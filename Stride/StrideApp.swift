@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct StrideApp: App {
+    init() {
+        ActiveRun.shared.install()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -12,6 +16,8 @@ struct StrideApp: App {
 
 struct RootView: View {
     @State private var store = ProgressStore.shared
+    @State private var active = ActiveRun.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView {
@@ -24,5 +30,19 @@ struct RootView: View {
             OnboardingView()
                 .interactiveDismissDisabled()
         }
+        .fullScreenCover(isPresented: Binding(get: { active.isPresented }, set: { if !$0 { active.close() } })) {
+            RunView().interactiveDismissDisabled()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // An intent can land before onRequest is wired; also refresh the wrist's "today" card.
+            if phase == .active {
+                if let pending = RunLauncher.pendingWorkoutID {
+                    RunLauncher.pendingWorkoutID = nil
+                    active.open(workoutID: pending, autoStart: true)
+                }
+                active.pushHome()
+            }
+        }
+        .onChange(of: store.runs.count) { _, _ in active.pushHome() }
     }
 }

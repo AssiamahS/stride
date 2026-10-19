@@ -3,23 +3,29 @@ import Observation
 import UIKit
 
 /// Drives one guided run: walks through the segments on a wall clock (survives backgrounding),
-/// fires coach cues at the right moments, and tracks distance.
+/// fires coach cues, tones and haptics at the right moments, tracks distance (GPS outdoors,
+/// pedometer on a treadmill), auto-pauses when you stop, and mirrors state to the watch and
+/// the lock screen.
 @Observable
 @MainActor
 final class RunEngine {
     enum State { case idle, running, paused, finished }
 
     let workout: Workout
+    let indoor: Bool
     private(set) var state: State = .idle
+    private(set) var autoPaused = false
     private(set) var elapsed: TimeInterval = 0
     private(set) var segmentIndex = 0
     private(set) var startedAt: Date?
     private(set) var finishedAt: Date?
 
     let location = LocationTracker()
+    let pedometer = PedometerTracker()
     private let voice = CoachVoice.shared
     private let script = CoachScript.load()
     private let picker = LinePicker()
+    private let watch = PhoneConnectivity.shared
 
     private var segmentStarts: [TimeInterval] = []
     private var accumulated: TimeInterval = 0      // elapsed before the current running stretch
@@ -27,6 +33,8 @@ final class RunEngine {
     private var timer: Timer?
     private var firedCues: Set<String> = []
     private var nextMotivationAt: TimeInterval = 0
+    private var lastMetricsPush: TimeInterval = -100
+    private var pendingHaptic: String?
 
     /// Seconds between unscheduled motivational drops (user setting: chatty / normal / quiet).
     var motivationInterval: TimeInterval {
@@ -34,8 +42,13 @@ final class RunEngine {
         return max(60, v)
     }
 
-    init(workout: Workout) {
+    var autoPauseEnabled: Bool {
+        !indoor && (UserDefaults.standard.object(forKey: "run.autoPause") as? Bool ?? true)
+    }
+
+    init(workout: Workout, indoor: Bool) {
         self.workout = workout
+        self.indoor = indoor
         var t: TimeInterval = 0
         for s in workout.segments { segmentStarts.append(t); t += TimeInterval(s.seconds) }
     }
@@ -49,7 +62,9 @@ final class RunEngine {
     var progress: Double { min(1, elapsed / Double(workout.totalSeconds)) }
     var segmentProgress: Double { min(1, segmentElapsed / Double(currentSegment.seconds)) }
     var nextSegment: Segment? { segmentIndex + 1 < workout.segments.count ? workout.segments[segmentIndex + 1] : nil }
-    var meters: Double { location.meters }
+    var meters: Double { indoor ? pedometer.meters : location.meters }
+    var heartRate: Double { watch.heartRate }
+    var calories: Double { watch.calories }
 
     /// Seconds per kilometre, nil until there's enough distance to be meaningful.
     var pacePerKm: TimeInterval? {
@@ -65,31 +80,50 @@ final class RunEngine {
         startedAt = Date()
         resumedAt = startedAt
         nextMotivationAt = motivationInterval
-        location.start()
+        if indoor { pedometer.start() } else { location.start() }
         UIApplication.shared.isIdleTimerDisabled = true
         if let l = picker.pick(from: script.start) { voice.say(l) }
         voice.say("Today: \(workout.coachSummary). \(Workout.spoken(workout.totalSeconds)) total.")
+        if indoor { voice.say("Treadmill mode. Distance comes from your stride, not GPS.") }
         announceSegment(0)
         startTimer()
+        publish(durable: true)
     }
 
-    func pause() {
+    func pause() { pause(auto: false) }
+
+    private func pause(auto: Bool) {
         guard state == .running else { return }
         accumulated = elapsed
         resumedAt = nil
         state = .paused
-        timer?.invalidate()
-        location.pause()
-        if let l = picker.pick(from: script.paused) { voice.say(l) }
+        autoPaused = auto
+        if indoor { pedometer.pause() } else { location.pause() }
+        if auto {
+            if let l = picker.pick(from: script.autoPaused ?? []) { voice.say(l) } else { voice.say("Auto paused.") }
+        } else {
+            timer?.invalidate()
+            if let l = picker.pick(from: script.paused) { voice.say(l) }
+        }
+        pendingHaptic = "stop"
+        publish(durable: true)
     }
 
     func resume() {
         guard state == .paused else { return }
+        let wasAuto = autoPaused
         resumedAt = Date()
         state = .running
-        location.resume()
-        if let l = picker.pick(from: script.resumed) { voice.say(l) }
+        autoPaused = false
+        if indoor { pedometer.resume() } else { location.resume() }
+        if wasAuto {
+            if let l = picker.pick(from: script.autoResumed ?? []) { voice.say(l) } else { voice.say("Back at it.") }
+        } else if let l = picker.pick(from: script.resumed) {
+            voice.say(l)
+        }
         startTimer()
+        pendingHaptic = "start"
+        publish(durable: true)
     }
 
     func togglePause() { state == .running ? pause() : resume() }
@@ -101,22 +135,42 @@ final class RunEngine {
         state = .finished
         finishedAt = Date()
         location.stop()
+        pedometer.stop()
         UIApplication.shared.isIdleTimerDisabled = false
         voice.stop()
+        Tones.shared.done()
+        Haptics.finish()
         if let l = picker.pick(from: script.finish) { voice.say(l) }
         let summary = distanceSentence()
         if !summary.isEmpty { voice.say(summary) }
-        let run = CompletedRun(workoutID: workout.id, date: startedAt ?? Date(), seconds: Int(elapsed), meters: meters)
-        Task { await WorkoutSaver.save(start: run.date, end: finishedAt ?? Date(), meters: meters) }
+        let run = CompletedRun(workoutID: workout.id, date: startedAt ?? Date(), seconds: Int(elapsed), meters: meters,
+                               avgHeartRate: heartRate > 0 ? heartRate : nil,
+                               calories: calories > 0 ? calories : nil, indoor: indoor)
+        pendingHaptic = "success"
+        publish(durable: true, phase: .finished)
+        // The watch owns the Health save when it has a live session (heart rate + calories ride along).
+        if !watch.watchSessionActive {
+            let m = meters
+            let start = run.date
+            let end = finishedAt ?? Date()
+            let inside = indoor
+            Task { await WorkoutSaver.save(start: start, end: end, meters: m, indoor: inside) }
+        }
+        LiveActivityManager.shared.end(final: activityState(paused: false))
+        watch.clearRunContext()
         return run
     }
 
     func cancel() {
         timer?.invalidate()
         location.stop()
+        pedometer.stop()
         voice.stop()
         UIApplication.shared.isIdleTimerDisabled = false
         state = .finished
+        publish(durable: true, phase: .cancelled)
+        LiveActivityManager.shared.end(final: nil)
+        watch.clearRunContext()
     }
 
     // MARK: Clock
@@ -136,6 +190,10 @@ final class RunEngine {
     }
 
     private func tick() {
+        if state == .paused, autoPaused {
+            if location.isMoving { resume() }
+            return
+        }
         guard state == .running else { return }
         updateElapsed()
 
@@ -151,24 +209,45 @@ final class RunEngine {
         }
 
         let seg = currentSegment
+        let remaining = segmentRemaining
         if seg.kind.isRunning {
             let half = Double(seg.seconds) / 2
             if seg.seconds >= 120, segmentElapsed >= half { fire("half-\(segmentIndex)", from: script.runHalfway) }
-            if seg.seconds >= 60, segmentRemaining <= 30 { fire("last30-\(segmentIndex)", from: script.runLast30) }
+            if seg.seconds >= 60, remaining <= 30 { fire("last30-\(segmentIndex)", from: script.runLast30) }
         }
         if totalRemaining <= 60 { fire("lastmin", from: script.lastMinute) }
+
+        // 3-2-1 before every change of pace
+        if nextSegment != nil, remaining <= 3.25 {
+            let n = Int(remaining.rounded(.up))
+            if n >= 1, n <= 3, !firedCues.contains("tick-\(segmentIndex)-\(n)") {
+                firedCues.insert("tick-\(segmentIndex)-\(n)")
+                Tones.shared.tick()
+                Haptics.tick()
+            }
+        }
+
+        if autoPauseEnabled, elapsed > 20, location.isStationary {
+            pause(auto: true)
+            return
+        }
 
         if elapsed >= nextMotivationAt {
             nextMotivationAt = elapsed + motivationInterval
             // never talk over a transition that's about to happen
-            if segmentRemaining > 45, totalRemaining > 90, !voice.isSpeaking,
+            if remaining > 45, totalRemaining > 90, !voice.isSpeaking,
                let l = picker.pick(from: script.motivation) {
                 voice.say(l)
             }
         }
+
+        if elapsed - lastMetricsPush >= 10 {
+            lastMetricsPush = elapsed
+            publish(durable: false)
+        }
     }
 
-    /// Set by the view: what to do when the clock runs out (finish + show summary).
+    /// Set by ActiveRun: what to do when the clock runs out (finish + show summary).
     var onFinishLine: (() -> Void)?
 
     private func fire(_ key: String, from pool: [CoachLine]) {
@@ -179,7 +258,12 @@ final class RunEngine {
 
     private func announceSegment(_ i: Int) {
         let seg = workout.segments[i]
-        if i > 0 { voice.stop() }   // a transition always wins over a half-finished pep talk
+        if i > 0 {
+            voice.stop()   // a transition always wins over a half-finished pep talk
+            seg.kind.isRunning ? Tones.shared.go() : Tones.shared.ease()
+            Haptics.transition(toRun: seg.kind.isRunning)
+            pendingHaptic = seg.kind.isRunning ? "start" : "stop"
+        }
         let pool: [CoachLine]
         switch seg.kind {
         case .warmup: pool = script.warmup
@@ -199,6 +283,7 @@ final class RunEngine {
             voice.say("\(Workout.spoken(seg.seconds)).")
         }
         if i > 0, seg.kind.isRunning, let sentence = distanceHint() { voice.say(sentence) }
+        if i > 0 { publish(durable: true) }
     }
 
     private func distanceHint() -> String? {
@@ -218,6 +303,37 @@ final class RunEngine {
         }
         return s
     }
+
+    // MARK: Mirroring (watch + lock screen)
+
+    private func publish(durable: Bool, phase: RunSnapshot.Phase? = nil) {
+        let now = Date()
+        let paused = state == .paused
+        let p: RunSnapshot.Phase = phase ?? (paused ? .paused : .running)
+        let snap = RunSnapshot(workoutID: workout.id, title: workout.title, phase: p,
+                               segmentLabel: currentSegment.kind.label, isRunSegment: currentSegment.kind.isRunning,
+                               segmentIndex: segmentIndex, segmentCount: workout.segments.count,
+                               segmentEnd: now.timeIntervalSince1970 + segmentRemaining,
+                               segmentRemaining: segmentRemaining,
+                               runEnd: now.timeIntervalSince1970 + totalRemaining,
+                               elapsed: elapsed, meters: meters, indoor: indoor, useMiles: Fmt.useMiles,
+                               haptic: pendingHaptic)
+        pendingHaptic = nil
+        watch.send(snap, durable: durable)
+        if p == .running || p == .paused {
+            LiveActivityManager.shared.update(activityState(paused: paused))
+        }
+    }
+
+    private func activityState(paused: Bool) -> RunActivityAttributes.ContentState {
+        let now = Date()
+        return RunActivityAttributes.ContentState(
+            title: workout.title, segmentLabel: currentSegment.kind.label, isRunSegment: currentSegment.kind.isRunning,
+            segmentStart: now.addingTimeInterval(-segmentElapsed), segmentEnd: now.addingTimeInterval(segmentRemaining),
+            runEnd: now.addingTimeInterval(totalRemaining), paused: paused, segmentRemaining: segmentRemaining,
+            segmentIndex: segmentIndex, segmentCount: workout.segments.count,
+            meters: meters, heartRate: heartRate, useMiles: Fmt.useMiles)
+    }
 }
 
 // MARK: - Formatting helpers shared by views
@@ -234,14 +350,14 @@ enum Fmt {
                          : String(format: "%d:%02d", s / 60, s % 60)
     }
 
-    static func distance(_ meters: Double) -> String {
-        if Fmt.useMiles { return String(format: "%.2f mi", meters / 1609.344) }
+    static func distance(_ meters: Double, miles: Bool = Fmt.useMiles) -> String {
+        if miles { return String(format: "%.2f mi", meters / 1609.344) }
         return String(format: "%.2f km", meters / 1000)
     }
 
-    static func pace(_ secPerKm: TimeInterval?) -> String {
+    static func pace(_ secPerKm: TimeInterval?, miles: Bool = Fmt.useMiles) -> String {
         guard let p = secPerKm else { return "--:--" }
-        let perUnit = Fmt.useMiles ? p * 1.609344 : p
-        return String(format: "%d:%02d /%@", Int(perUnit) / 60, Int(perUnit) % 60, Fmt.useMiles ? "mi" : "km")
+        let perUnit = miles ? p * 1.609344 : p
+        return String(format: "%d:%02d /%@", Int(perUnit) / 60, Int(perUnit) % 60, miles ? "mi" : "km")
     }
 }

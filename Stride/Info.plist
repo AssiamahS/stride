@@ -29,9 +29,13 @@
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Stride saves each guided run to Health as a running workout.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Stride tracks your route while you run so the coach can tell you your distance and pace.</string>
+	<string>Stride tracks your route while you run so the coach can tell you your distance and pace, and pauses the clock when you stop.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Stride records a short voice sample when you choose to build a custom coach voice.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Stride uses your stride length from the motion sensors to estimate distance on a treadmill.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

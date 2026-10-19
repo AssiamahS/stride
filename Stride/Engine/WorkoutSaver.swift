@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 
 /// Writes a finished guided run to Health as a running workout. Best effort: a failure here
-/// never blocks the summary screen.
+/// never blocks the summary screen. When the watch has a live session it saves instead (with heart rate).
 enum WorkoutSaver {
     static let store = HKHealthStore()
 
@@ -15,11 +15,11 @@ enum WorkoutSaver {
         try? await store.requestAuthorization(toShare: types, read: [HKObjectType.workoutType()])
     }
 
-    static func save(start: Date, end: Date, meters: Double) async {
+    static func save(start: Date, end: Date, meters: Double, indoor: Bool) async {
         guard isAvailable else { return }
         let config = HKWorkoutConfiguration()
         config.activityType = .running
-        config.locationType = .outdoor
+        config.locationType = indoor ? .indoor : .outdoor
         let builder = HKWorkoutBuilder(healthStore: store, configuration: config, device: .local())
         do {
             try await builder.beginCollection(at: start)

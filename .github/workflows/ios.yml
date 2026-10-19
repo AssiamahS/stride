@@ -27,6 +27,15 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Build watch app standalone (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Stride.xcodeproj \
+            -scheme StrideWatch \
+            -configuration Release \
+            -destination 'generic/platform=watchOS' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
   release:
     name: Sign, upload to TestFlight, publish ad hoc install page
@@ -105,6 +114,21 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
+      - name: Re-archive iPhone-only for ad hoc (no watch app: ad hoc profiles need a registered Apple Watch)
+        if: steps.creds.outputs.have == 'true'
+        run: |
+          set -o pipefail
+          sed -i '' '/^      - target: StrideWatch$/d' project.yml
+          xcodegen generate
+          xcodebuild archive \
+            -project Stride.xcodeproj \
+            -scheme Stride \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/StrideAdHoc.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            CURRENT_PROJECT_VERSION=$GITHUB_RUN_NUMBER
+
       - name: Export ad hoc IPA (registered devices only)
         if: steps.creds.outputs.have == 'true'
         env:
@@ -113,7 +137,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -exportArchive \
-            -archivePath build/Stride.xcarchive \
+            -archivePath build/StrideAdHoc.xcarchive \
             -exportOptionsPlist ExportOptionsAdHoc.plist \
             -exportPath build/adhoc \
             -allowProvisioningUpdates \

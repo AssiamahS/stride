@@ -141,7 +141,7 @@ final class CoachVoice: NSObject {
         synth.speak(utt)
     }
 
-    private func activateSession() {
+    func activateSession() {
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
         try? s.setActive(true)

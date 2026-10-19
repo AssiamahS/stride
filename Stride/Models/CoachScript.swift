@@ -21,9 +21,12 @@ struct CoachScript: Codable {
     var finish: [CoachLine]
     var paused: [CoachLine]
     var resumed: [CoachLine]
+    /// Optional pools (older cues.json files don't have them).
+    var autoPaused: [CoachLine]?
+    var autoResumed: [CoachLine]?
 
     var allLines: [CoachLine] {
-        start + warmup + runStart + walkStart + cooldown + runHalfway + runLast30 + motivation + lastMinute + finish + paused + resumed
+        start + warmup + runStart + walkStart + cooldown + runHalfway + runLast30 + motivation + lastMinute + finish + paused + resumed + (autoPaused ?? []) + (autoResumed ?? [])
     }
 
     static let empty = CoachScript(start: [], warmup: [], runStart: [], walkStart: [], cooldown: [], runHalfway: [],

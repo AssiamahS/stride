@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var store = ProgressStore.shared
-    @State private var activeWorkout: Workout?
+    @State private var active = ActiveRun.shared
 
     var body: some View {
         NavigationStack {
@@ -16,7 +16,7 @@ struct HomeView: View {
 
                     section("Guided runs") {
                         ForEach(Plans.guided) { w in
-                            WorkoutRow(workout: w, done: store.isDone(w)) { activeWorkout = w }
+                            WorkoutRow(workout: w, done: store.isDone(w)) { active.open(w) }
                         }
                     }
 
@@ -31,9 +31,6 @@ struct HomeView: View {
                 .padding()
             }
             .navigationTitle("Stride")
-            .fullScreenCover(item: $activeWorkout) { w in
-                RunView(workout: w)
-            }
         }
     }
 
@@ -53,7 +50,7 @@ struct HomeView: View {
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
-            Button { activeWorkout = w } label: {
+            Button { active.open(w) } label: {
                 Label("Start guided run", systemImage: "play.fill")
                     .font(.headline)
                     .frame(maxWidth: .infinity)

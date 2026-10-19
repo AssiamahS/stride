@@ -6,6 +6,9 @@ struct CoachSettingsView: View {
     @State private var voice = CoachVoice.shared
     @AppStorage("coach.chattiness") private var chattiness: Double = 180
     @AppStorage("units.miles") private var miles: Bool = Locale.current.measurementSystem == .us
+    @AppStorage("coach.tones") private var tones: Bool = true
+    @AppStorage("coach.haptics") private var haptics: Bool = true
+    @AppStorage("run.autoPause") private var autoPause: Bool = true
 
     private let script = CoachScript.load()
 
@@ -84,6 +87,19 @@ struct CoachSettingsView: View {
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 
+                Section("During the run") {
+                    Toggle("Countdown beeps (3, 2, 1)", isOn: $tones)
+                    Toggle("Haptic taps on changes", isOn: $haptics)
+                    Toggle("Auto-pause when you stop", isOn: $autoPause)
+                    Text("Auto-pause uses GPS, so it's off on the treadmill. Your Apple Watch taps your wrist at every change of pace.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+
+                Section("Shortcuts") {
+                    Text("Say \"Hey Siri, start my run in Stride\", or add the Stride button to Control Center (hold the lock screen, Customize).")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+
                 Section("Units") {
                     Toggle("Miles", isOn: $miles)
                 }
@@ -107,6 +123,7 @@ struct ScriptView: View {
             group("Walk breaks", script.walkStart); group("Halfway", script.runHalfway); group("Last 30s", script.runLast30)
             group("Pep talks", script.motivation); group("Last minute", script.lastMinute); group("Cool down", script.cooldown)
             group("Finish", script.finish)
+            group("Auto-pause", script.autoPaused ?? []); group("Auto-resume", script.autoResumed ?? [])
         }
         .navigationTitle("Coach script")
     }

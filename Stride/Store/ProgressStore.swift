@@ -7,6 +7,9 @@ struct CompletedRun: Codable, Identifiable, Hashable {
     let date: Date
     let seconds: Int
     let meters: Double
+    var avgHeartRate: Double? = nil
+    var calories: Double? = nil
+    var indoor: Bool = false
 
     var workout: Workout? { Plans.workout(id: workoutID) }
 }

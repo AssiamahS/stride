@@ -63,5 +63,13 @@
   ],
   "resumed": [
     {"id": "resume-01", "text": "Back at it. Right where we left off."}
+  ],
+  "autoPaused": [
+    {"id": "autopause-01", "text": "Auto paused. Clock's stopped. Move and we go again."},
+    {"id": "autopause-02", "text": "Paused for you. Catch the light, then let's go."}
+  ],
+  "autoResumed": [
+    {"id": "autoresume-01", "text": "And we're moving. Clock's running."},
+    {"id": "autoresume-02", "text": "Back on. Same pace as before."}
   ]
 }

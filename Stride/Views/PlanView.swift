@@ -2,7 +2,7 @@ import SwiftUI
 
 struct PlanView: View {
     @State private var store = ProgressStore.shared
-    @State private var activeWorkout: Workout?
+    @State private var active = ActiveRun.shared
     @State private var confirmReset = false
 
     var body: some View {
@@ -20,7 +20,7 @@ struct PlanView: View {
                 ForEach(store.activeWeeks) { week in
                     Section("Week \(week.week) · \(week.theme)") {
                         ForEach(week.workouts) { w in
-                            Button { activeWorkout = w } label: {
+                            Button { active.open(w) } label: {
                                 HStack {
                                     Image(systemName: store.isDone(w) ? "checkmark.circle.fill" : (store.nextWorkout?.id == w.id ? "play.circle.fill" : "circle"))
                                         .foregroundStyle(store.isDone(w) ? .green : Color.accentColor)
@@ -43,7 +43,6 @@ struct PlanView: View {
             .confirmationDialog("Pick a new starting week? Your run history stays.", isPresented: $confirmReset, titleVisibility: .visible) {
                 Button("Choose again") { store.hasOnboarded = false }
             }
-            .fullScreenCover(item: $activeWorkout) { w in RunView(workout: w) }
         }
     }
 }

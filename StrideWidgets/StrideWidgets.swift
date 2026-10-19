@@ -39,7 +39,7 @@ struct RunLiveActivity: Widget {
                     Label(context.state.paused ? "Paused" : context.state.segmentLabel,
                           systemImage: context.state.isRunSegment ? "figure.run" : "figure.walk")
                         .font(.caption.bold())
-                        .foregroundStyle(tint(context.state))
+                        .foregroundStyle(phaseTint(context.state))
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Countdown(state: context.state).font(.title3.bold()).frame(maxWidth: 80)
@@ -48,7 +48,7 @@ struct RunLiveActivity: Widget {
                     VStack(spacing: 4) {
                         if !context.state.paused {
                             ProgressView(timerInterval: context.state.segmentStart...context.state.segmentEnd, countsDown: true)
-                                .labelsHidden().tint(tint(context.state))
+                                .labelsHidden().tint(phaseTint(context.state))
                         }
                         HStack {
                             Text(context.state.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -63,18 +63,18 @@ struct RunLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: context.state.isRunSegment ? "figure.run" : "figure.walk")
-                    .foregroundStyle(tint(context.state))
+                    .foregroundStyle(phaseTint(context.state))
             } compactTrailing: {
-                Countdown(state: context.state).font(.caption2.bold()).frame(maxWidth: 44).foregroundStyle(tint(context.state))
+                Countdown(state: context.state).font(.caption2.bold()).frame(maxWidth: 44).foregroundStyle(phaseTint(context.state))
             } minimal: {
                 Image(systemName: context.state.isRunSegment ? "figure.run" : "figure.walk")
-                    .foregroundStyle(tint(context.state))
+                    .foregroundStyle(phaseTint(context.state))
             }
         }
     }
 }
 
-private func tint(_ s: RunActivityAttributes.ContentState) -> Color {
+private func phaseTint(_ s: RunActivityAttributes.ContentState) -> Color {
     if s.paused { return .orange }
     return s.isRunSegment ? .green : .blue
 }
@@ -106,13 +106,13 @@ struct LockScreenRunView: View {
                 Label(state.paused ? "Paused" : state.segmentLabel,
                       systemImage: state.isRunSegment ? "figure.run" : "figure.walk")
                     .font(.headline)
-                    .foregroundStyle(tint(state))
+                    .foregroundStyle(phaseTint(state))
                 Spacer()
                 Countdown(state: state).font(.system(size: 34, weight: .bold, design: .rounded))
             }
             if !state.paused {
                 ProgressView(timerInterval: state.segmentStart...state.segmentEnd, countsDown: true)
-                    .labelsHidden().tint(tint(state))
+                    .labelsHidden().tint(phaseTint(state))
             }
             HStack {
                 Text("\(state.title) · \(state.segmentIndex + 1)/\(state.segmentCount)")
